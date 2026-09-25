@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Tic Tac Toe</title><link rel="stylesheet" href="common.css">
+<style>
+:root{--bg:#2c3a48;--bg2:#1b2530;--x:#e0413b;--o:#2a8fd6;--tipbg:#4aa3df}
+.players{width:min(92vw,420px);display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.av{width:64px;height:64px;border-radius:16px;display:grid;place-items:center;box-shadow:inset 0 -5px 0 rgba(0,0,0,.3);opacity:.45;transition:opacity .2s,transform .2s}
+.av svg{width:34px;height:34px}
+.av.me{background:#7a1f1f;color:#f2d4d4}.av.ai{background:#12314a;color:#bfe0ff}
+.av.turn{opacity:1;transform:scale(1.06)}
+.arrow{flex:1;display:flex;justify-content:center;gap:8px;font-size:13px;color:var(--mute);text-align:center}
+.arrow svg{width:26px;height:26px;transition:transform .2s;color:#cfd6df}
+#score{font-size:15px;letter-spacing:.04em}
+#b{width:min(92vw,420px);aspect-ratio:1;background:#16212c;border-radius:22px;padding:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;box-shadow:0 6px 0 rgba(0,0,0,.3)}
+.s{background:#0c111a;border-radius:16px;display:grid;place-items:center;cursor:pointer;position:relative}
+.s svg{width:72%;height:72%}
+.s.win{background:#243852}
+.s svg{animation:pop .25s cubic-bezier(.3,1.6,.6,1)}
+@keyframes pop{from{transform:scale(.3)}}
+</style></head><body>
+<div class="jg-main" id="main">
+  <div class="players"><div class="av me turn" id="me"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4.5"/><path d="M3 21a9 9 0 0 1 18 0z"/></svg></div>
+  <div class="arrow"><div><svg id="arr" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4v16L5 12z"/></svg><div id="score">0 · 0 · 0</div></div></div>
+  <div class="av ai" id="ai"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="8" width="14" height="12" rx="3"/><rect x="11" y="3" width="2" height="4"/><circle cx="12" cy="3" r="1.6"/><circle cx="9.5" cy="13" r="1.4" fill="#12314a"/><circle cx="14.5" cy="13" r="1.4" fill="#12314a"/><rect x="9" y="16" width="6" height="1.6" rx=".8" fill="#12314a"/></svg></div></div>
+  <div id="b"></div>
+</div>
+<script src="common.js"></script>
+<script>
+(function(){
+const X='<svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19" stroke="#e0413b" stroke-width="4.6" stroke-linecap="round"/></svg>';
+const O='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#2a8fd6" stroke-width="4.4"/></svg>';
+const L=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let g,turn,over,sc=JG.load('score',{w:0,d:0,l:0}),first='me';
+JG.init({id:'ttt',name:'Tic Tac Toe',onReplay:()=>start()});
+JG.stats([['You vs Robot','']]);
+function winner(b){for(const l of L){if(b[l[0]]&&b[l[0]]===b[l[1]]&&b[l[1]]===b[l[2]])return {p:b[l[0]],l}}return b.every(Boolean)?{p:'d'}:null}
+function mm(b,p){const w=winner(b);if(w)return w.p==='o'?10:w.p==='x'?-10:0;
+  let best=p==='o'?-99:99;for(let i=0;i<9;i++)if(!b[i]){b[i]=p;const v=mm(b,p==='o'?'x':'o');b[i]=null;best=p==='o'?Math.max(best,v):Math.min(best,v)}return best}
+function aiMove(){
+  const free=[...Array(9).keys()].filter(i=>!g[i]);
+  if(Math.random()<.22)return free[Math.floor(Math.random()*free.length)];
+  let bi=free[0],bv=-99;for(const i of free){g[i]='o';const v=mm(g,'x');g[i]=null;if(v>bv){bv=v;bi=i}}return bi;
+}
+function render(wl){
+  const b=document.getElementById('b');
+  b.innerHTML=g.map((v,i)=>`<div class="s${wl&&wl.includes(i)?' win':''}" data-i="${i}">${v==='x'?X:v==='o'?O:''}</div>`).join('');
+  document.getElementById('me').classList.toggle('turn',turn==='x');document.getElementById('ai').classList.toggle('turn',turn==='o');
+  document.getElementById('arr').style.transform=turn==='x'?'':'scaleX(-1)';
+  document.getElementById('score').textContent=`${sc.w} · ${sc.d} · ${sc.l}`;
+}
+function start(){g=Array(9).fill(null);over=false;turn=first==='me'?'x':'o';render();if(turn==='o')setTimeout(ai,500)}
+function check(){
+  const w=winner(g);if(!w)return false;over=true;
+  if(w.p==='x')sc.w++;else if(w.p==='o')sc.l++;else sc.d++;JG.save('score',sc);
+  render(w.l);first=first==='me'?'ai':'me';
+  setTimeout(()=>JG.result({win:w.p==='x',title:w.p==='x'?'You Win!':w.p==='o'?'Robot Wins':'Draw!',lines:[`You ${sc.w} · Draw ${sc.d} · Robot ${sc.l}`],buttons:[{label:'Play Again',fn:start}]}),600);
+  return true;
+}
+function ai(){if(over)return;g[aiMove()]='o';JG.SFX.place();turn='x';render();check()}
+document.getElementById('b').addEventListener('click',e=>{
+  const s=e.target.closest('.s');if(!s||over||turn!=='x')return;const i=+s.dataset.i;if(g[i])return;
+  JG.tutDone();g[i]='x';JG.SFX.tap();JG.vibrate();turn='o';render();if(!check())setTimeout(ai,450);
+});
+start();
+JG.tutorial('Tap an empty square to place your mark',()=>document.querySelector('.s[data-i="0"]'),'bottom');
+})();
+</script></body></html>

@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Sudoku</title><link rel="stylesheet" href="common.css">
+<style>
+:root{--bg:#e9c38e;--bg2:#5a3a22;--ink:#5a3314;--mute:rgba(90,51,20,.65);--tipbg:#fff;--accent:#c07a2a;--panel:rgba(90,51,20,.15)}
+body{background:repeating-linear-gradient(95deg,#ecc792 0 18px,#e6bd85 18px 34px)}
+.jg-foot{color:#d9a86b}
+.jg-tip{color:#6b3a14}
+#g{display:grid;background:#5a3314;border:5px solid #5a3314;border-radius:6px;gap:2px}
+.cl{background:#8a5a33;display:grid;place-items:center;font-family:'Lilita One',sans-serif;font-size:calc(var(--cs)*.56);color:#5a3314;cursor:pointer;position:relative}
+.cl.g,.cl.u{background:linear-gradient(#ffe9da,#f6d2bd);box-shadow:inset 0 -4px 0 #e0b59b}
+.cl.u{color:#2c6fb8}
+.cl.sel{background:#b98652;box-shadow:inset 0 0 0 3px #ffd766}
+.cl.same{filter:brightness(1.08)}
+.cl.err{animation:err .4s}
+@keyframes err{30%{background:#e85a4a}}
+.bR{border-right:3px solid #3d2210}.bB{border-bottom:3px solid #3d2210}
+#pad{display:flex;gap:6px;margin-top:20px}
+.pd{width:var(--ps);height:calc(var(--ps)*1.15);border:0;border-radius:8px;background:linear-gradient(#ffe9da,#f6d2bd);box-shadow:inset 0 -5px 0 #e0b59b,0 4px 0 #c99a7c;font-family:'Lilita One',sans-serif;font-size:calc(var(--ps)*.6);color:#5a3314;cursor:pointer}
+.pd:active{transform:translateY(2px)}
+.pd.used{opacity:.35}
+.pd.pick{background:linear-gradient(#ffd766,#f5a623);box-shadow:inset 0 -5px 0 #c98200,0 4px 0 #a86c00}
+#hearts{font-size:18px;letter-spacing:3px}
+</style></head><body>
+<div class="jg-main" id="main"><div id="hearts"></div><div id="g" style="margin-top:8px"></div><div id="pad"></div></div>
+<script src="common.js"></script>
+<script>
+(function(){
+let level=JG.load('level',1),N,BR,BC,sol,puz,cur,sel=null,lives=3;
+JG.init({id:'sudoku',name:'Sudoku',onReplay:()=>start()});
+const $=id=>document.getElementById(id);
+function ok(g,i,v){const r=Math.floor(i/N),c=i%N;for(let k=0;k<N;k++){if(g[r*N+k]===v||g[k*N+c]===v)return false}
+  const r0=r-r%BR,c0=c-c%BC;for(let a=0;a<BR;a++)for(let b=0;b<BC;b++)if(g[(r0+a)*N+c0+b]===v)return false;return true}
+function fill(g,r){const i=g.indexOf(0);if(i<0)return true;const vs=JG.shuffle([...Array(N)].map((_,k)=>k+1),r);for(const v of vs){if(ok(g,i,v)){g[i]=v;if(fill(g,r))return true;g[i]=0}}return false}
+function count(g,lim){const i=g.indexOf(0);if(i<0)return 1;let n=0;for(let v=1;v<=N;v++){if(ok(g,i,v)){g[i]=v;n+=count(g,lim);g[i]=0;if(n>=lim)break}}return n}
+function start(){
+  N=level<=6?6:9;BR=N===6?2:3;BC=3;
+  const r=JG.rng(level*2654435761);sol=Array(N*N).fill(0);fill(sol,r);
+  puz=sol.slice();const clues=N===6?Math.max(12,22-level*2):Math.max(28,40-(level-7));
+  const order=JG.shuffle([...Array(N*N).keys()],r);let filled=N*N;
+  for(const i of order){if(filled<=clues)break;const v=puz[i];puz[i]=0;if(count(puz.slice(),2)!==1)puz[i]=v;else filled--}
+  cur=puz.slice();sel=null;lives=3;layout();
+}
+function layout(){
+  const w=Math.min(innerWidth-28,440),cs=Math.floor((w-10-(N-1)*2-(N/BC-1)*3)/N);
+  $('g').style.gridTemplateColumns=`repeat(${N},${cs}px)`;$('g').style.gridTemplateRows=`repeat(${N},${cs}px)`;$('g').style.setProperty('--cs',cs+'px');
+  const ps=Math.floor(Math.min(58,(w-(N-1)*6)/N));$('pad').style.setProperty('--ps',ps+'px');
+  render();
+}
+function render(){
+  const sv=sel!=null?cur[sel]:0;
+  $('g').innerHTML=cur.map((v,i)=>{const r=Math.floor(i/N),c=i%N;
+    const cls=['cl',puz[i]?'g':v?'u':'',sel===i?'sel':'',sv&&v===sv?'same':'',(c%BC===BC-1&&c<N-1)?'bR':'',(r%BR===BR-1&&r<N-1)?'bB':''].join(' ');
+    return `<div class="${cls}" data-i="${i}">${v||''}</div>`}).join('');
+  $('pad').innerHTML=[...Array(N)].map((_,k)=>{const v=k+1,used=cur.filter(x=>x===v).length>=N;return `<button class="pd${used?' used':''}" data-v="${v}">${v}</button>`}).join('');
+  $('hearts').textContent='❤️'.repeat(lives)+'🤍'.repeat(3-lives);
+  JG.stats([['Level',level],['Size',N+'×'+N]]);
+}
+$('g').addEventListener('click',e=>{const c=e.target.closest('.cl');if(!c)return;const i=+c.dataset.i;sel=i;JG.SFX.tap();JG.tutDone();render()});
+$('pad').addEventListener('click',e=>{
+  const b=e.target.closest('.pd');if(!b||sel==null||puz[sel]||cur[sel]===sol[sel])return;const v=+b.dataset.v;
+  if(sol[sel]===v){cur[sel]=v;JG.SFX.place();JG.vibrate();render();
+    if(cur.every((x,i)=>x===sol[i]))setTimeout(()=>JG.result({win:true,title:'Solved!',lines:['Level '+level+' complete'],buttons:[{label:'Next Level',fn:()=>{level++;JG.save('level',level);start()}}]}),300);
+  }else{lives--;JG.SFX.bad();JG.vibrate('MEDIUM');render();const el=document.querySelector(`.cl[data-i="${sel}"]`);el&&el.classList.add('err');
+    if(lives<=0)setTimeout(()=>JG.result({win:false,title:'Out of lives',lines:['Try this puzzle again'],buttons:[{label:'Retry',fn:()=>{cur=puz.slice();lives=3;sel=null;render()}}]}),400)}
+});
+start();
+JG.tutorial('Tap an empty cell, then pick a number',()=>{const i=cur.indexOf(0);return document.querySelector(`.cl[data-i="${i}"]`)},'top');
+})();
+</script></body></html>

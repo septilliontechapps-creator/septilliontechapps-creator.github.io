@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Minesweeper</title><link rel="stylesheet" href="common.css">
+<style>
+:root{--bg:#23402b;--bg2:#15291b;--tipbg:#3a9a4f;--accent:#9be15d;--panel:rgba(255,255,255,.12)}
+#modes{display:flex;gap:6px;margin-bottom:12px}
+#modes button{border:0;border-radius:20px;padding:7px 14px;font:800 14px 'Nunito',sans-serif;background:rgba(255,255,255,.1);color:#fff;cursor:pointer}
+#modes button.on{background:#9be15d;color:#173d1d}
+#g{display:grid;gap:2px;background:#15291b;padding:4px;border-radius:10px}
+.m{display:grid;place-items:center;font-family:'Lilita One',sans-serif;font-size:calc(var(--cs)*.6);cursor:pointer;border-radius:4px;line-height:1}
+.m.h{background:#6cc160;box-shadow:inset 0 3px 0 rgba(255,255,255,.3),inset 0 -3px 0 rgba(0,0,0,.2)}
+.m.h:nth-child(odd){background:#62b556}
+.m.o{background:#e7d3a8}.m.o:nth-child(odd){background:#dcc79a}
+.m.boom{background:#e74c3c}
+.n1{color:#1f6fd1}.n2{color:#2e8b3a}.n3{color:#d13b2e}.n4{color:#7b2fbf}.n5{color:#b8651b}.n6{color:#138f8f}.n7{color:#333}.n8{color:#777}
+#fl{margin-top:14px}
+#fl.on{background:#e74c3c}
+</style></head><body>
+<div class="jg-main" id="main"><div id="modes"><button data-m="0">Easy</button><button data-m="1">Medium</button><button data-m="2">Hard</button></div>
+<div id="g"></div><button class="jg-btn" id="fl"></button></div>
+<script src="common.js"></script>
+<script>
+(function(){
+const MODES=[[8,8,10],[9,12,20],[10,14,32]];
+let mode=JG.load('mode',0),W,H,M,mine,open,flag,first,over,flagMode=false,t0=0,timer;
+JG.init({id:'mines',name:'Minesweeper',onReplay:()=>start()});
+const $=id=>document.getElementById(id);
+$('fl').innerHTML=JG.ICON.flag+' Flag mode';
+function start(){[W,H,M]=MODES[mode];mine=Array(W*H).fill(false);open=Array(W*H).fill(false);flag=Array(W*H).fill(false);first=true;over=false;clearInterval(timer);t0=0;
+  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',+b.dataset.m===mode));layout()}
+function nb(i){const x=i%W,y=Math.floor(i/W),o=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<W&&Y<H)o.push(Y*W+X)}return o}
+function cnt(i){return nb(i).filter(k=>mine[k]).length}
+function plant(safe){const ban=new Set([safe,...nb(safe)]);let n=0;while(n<M){const k=Math.floor(Math.random()*W*H);if(!mine[k]&&!ban.has(k)){mine[k]=true;n++}}}
+function layout(){const main=$('main').getBoundingClientRect();const cs=Math.floor(Math.min((Math.min(innerWidth,440)-30)/W,(main.height-130)/H,46));
+  const g=$('g');g.style.gridTemplateColumns=`repeat(${W},${cs}px)`;g.style.gridTemplateRows=`repeat(${H},${cs}px)`;g.style.setProperty('--cs',cs+'px');render()}
+function render(boom){
+  $('g').innerHTML=mine.map((m,i)=>{
+    if(open[i]||(over&&m)){const n=cnt(i);return `<div class="m o${boom===i?' boom':''}${m?'':' n'+n}" data-i="${i}">${m?'💣':n||''}</div>`}
+    return `<div class="m h" data-i="${i}">${flag[i]?'🚩':''}</div>`}).join('');
+  const t=t0?Math.floor((Date.now()-t0)/1000):0;
+  JG.stats([['Mines',M-flag.filter(Boolean).length],['Time',t,'tm']]);
+}
+function reveal(i){const st=[i];while(st.length){const k=st.pop();if(open[k]||flag[k])continue;open[k]=true;if(!mine[k]&&cnt(k)===0)nb(k).forEach(q=>{if(!open[q])st.push(q)})}}
+function act(i,asFlag){
+  if(over||open[i])return;JG.tutDone();
+  if(asFlag){flag[i]=!flag[i];JG.SFX.tap();JG.vibrate();render();return}
+  if(flag[i])return;
+  if(first){first=false;plant(i);t0=Date.now();timer=setInterval(()=>{const e=$('tm');if(e)e.textContent=Math.floor((Date.now()-t0)/1000)},1000)}
+  if(mine[i]){over=true;clearInterval(timer);render(i);JG.vibrate('HEAVY');return setTimeout(()=>JG.result({win:false,title:'Boom!',lines:['You hit a mine'],buttons:[{label:'Try Again',fn:start}]}),500)}
+  reveal(i);JG.SFX.place();render();
+  if(open.filter(Boolean).length===W*H-M){over=true;clearInterval(timer);const s=Math.floor((Date.now()-t0)/1000);const bk='best'+mode,b=JG.load(bk,0);if(!b||s<b)JG.save(bk,s);
+    setTimeout(()=>JG.result({win:true,title:'You Win!',lines:['Time '+s+' sec','Best '+Math.min(s,b||s)+' sec'],buttons:[{label:'Play Again',fn:start}]}),300)}
+}
+let lp=null,lpFired=false;
+$('g').addEventListener('pointerdown',e=>{const c=e.target.closest('.m');if(!c)return;lpFired=false;lp=setTimeout(()=>{lpFired=true;act(+c.dataset.i,true)},420)});
+$('g').addEventListener('pointerup',e=>{clearTimeout(lp);const c=e.target.closest('.m');if(!c||lpFired)return;act(+c.dataset.i,flagMode)});
+$('g').addEventListener('pointerleave',()=>clearTimeout(lp));
+$('fl').onclick=()=>{flagMode=!flagMode;$('fl').classList.toggle('on',flagMode);JG.SFX.tap()};
+$('modes').onclick=e=>{const b=e.target.closest('button');if(!b)return;mode=+b.dataset.m;JG.save('mode',mode);JG.SFX.tap();start()};
+start();
+JG.tutorial('Tap a square to open it. Long-press to put a flag',()=>document.querySelector(`.m[data-i="${Math.floor(H/2)*W+Math.floor(W/2)}"]`),'bottom');
+})();
+</script></body></html>

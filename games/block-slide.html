@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Block Slide</title><link rel="stylesheet" href="common.css">
+<style>
+:root{--bg:#34498a;--bg2:#22326a;--tipbg:#3fa0e8;--accent:#ffd166;--panel:rgba(255,255,255,.12)}
+#best{display:flex;align-items:center;gap:6px;color:#ffc93c;font-family:'Lilita One',sans-serif;font-size:26px;align-self:flex-start;margin-left:6px}
+#sc{font-family:'Lilita One',sans-serif;font-size:56px;line-height:1;margin:2px 0 12px;text-shadow:0 4px 0 rgba(0,0,0,.25)}
+#bd{position:relative;background:#1d2552;border:4px solid #2c3a78;border-radius:10px;
+  background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:var(--cs) var(--cs)}
+.bar{position:absolute;border-radius:5px;cursor:grab;transition:left .15s,top .15s;box-shadow:inset 0 4px 0 rgba(255,255,255,.35),inset 0 -5px 0 rgba(0,0,0,.25),inset 4px 0 0 rgba(255,255,255,.12)}
+.bar.drag{transition:none;filter:brightness(1.15);z-index:5}
+.bar.clr{animation:clr .3s forwards}
+@keyframes clr{to{transform:scaleY(0);opacity:0;filter:brightness(2)}}
+#pv{position:relative;height:16px;margin-top:14px;background:#1d2552;border-radius:8px;border:3px solid #2c3a78}
+#pv i{position:absolute;top:2px;bottom:2px;border-radius:4px;background:#1ee7ff}
+</style></head><body>
+<div class="jg-main" id="main">
+  <div id="best"><svg width="30" height="30" viewBox="0 0 24 24" fill="#ffc93c"><path d="M6 3h12v2h3v3a5 5 0 0 1-5 5 5 5 0 0 1-3 2.6V18h3v3H8v-3h3v-2.4A5 5 0 0 1 8 13a5 5 0 0 1-5-5V5h3zm-1 4v1a3 3 0 0 0 2 2.8V7zm14 0h-2v3.8A3 3 0 0 0 19 8z"/></svg><span id="bs">0</span></div>
+  <div id="sc">0</div>
+  <div id="bd"></div><div id="pv"></div>
+</div>
+<script src="common.js"></script>
+<script>
+(function(){
+const COLS=8,ROWS=10,COL=['#3fc84a','#3d6ff0','#f0c030','#f07a2a','#9a5ce6','#e23c3c'];
+let bars=[],nextRow,score=0,best=JG.load('best',0),cs=40,busy=false,uid=0,combo=0;
+JG.init({id:'slide',name:'Block Slide',onReplay:()=>start()});
+JG.stats([]);
+const $=id=>document.getElementById(id);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function genRow(){
+  for(;;){const row=[];let c=0;
+    while(c<COLS){if(Math.random()<.3){c++;continue}const len=Math.min(COLS-c,1+Math.floor(Math.random()*4));row.push({c,len,col:COL[Math.floor(Math.random()*COL.length)]});c+=len+(Math.random()<.35?1:0)}
+    const filled=row.reduce((a,b)=>a+b.len,0);if(filled>=4&&filled<=COLS-1)return row}
+}
+function occ(ex){const g=Array(ROWS*COLS).fill(null);for(const b of bars)if(b!==ex)for(let k=0;k<b.len;k++)g[b.r*COLS+b.c+k]=b;return g}
+function settle(){let moved=false,ch=true;while(ch){ch=false;bars.sort((a,b)=>b.r-a.r);
+  for(const b of bars){const g=occ(b);while(b.r+1<ROWS&&[...Array(b.len)].every((_,k)=>!g[(b.r+1)*COLS+b.c+k])){b.r++;ch=moved=true}}}return moved}
+function fullRows(){const g=occ();const rs=[];for(let r=0;r<ROWS;r++)if([...Array(COLS)].every((_,c)=>g[r*COLS+c]))rs.push(r);return rs}
+async function resolve(){
+  for(;;){
+    if(settle()){render();await wait(170)}
+    const rs=fullRows();if(!rs.length)break;
+    combo++;const pts=rs.length*80*combo;score+=pts;if(score>best){best=score;JG.save('best',best)}
+    bars.filter(b=>rs.includes(b.r)).forEach(b=>{const el=document.querySelector(`.bar[data-id="${b.id}"]`);el&&el.classList.add('clr')});
+    JG.SFX.good();JG.vibrate('MEDIUM');JG.toast(combo>1?'Combo ×'+combo:rs.length>1?'Great!':'Good!');
+    await wait(300);bars=bars.filter(b=>!rs.includes(b.r));render();
+  }
+}
+function pushRow(){
+  for(const b of bars)b.r--;
+  for(const s of nextRow)bars.push({id:uid++,r:ROWS-1,c:s.c,len:s.len,col:s.col});
+  nextRow=genRow();
+}
+async function afterMove(){
+  busy=true;combo=0;await resolve();
+  pushRow();render();await wait(180);
+  if(bars.some(b=>b.r<0)){busy=false;return JG.result({win:false,title:'Game Over',lines:['Score '+score,'Best '+best],buttons:[{label:'Play Again',fn:start}]})}
+  await resolve();busy=false;
+}
+function render(){
+  const bd=$('bd');bd.style.width=(COLS*cs+8)+'px';bd.style.height=(ROWS*cs+8)+'px';bd.style.setProperty('--cs',cs+'px');
+  const have=new Set();
+  for(const b of bars){have.add(String(b.id));let el=bd.querySelector(`.bar[data-id="${b.id}"]`);
+    if(!el){el=document.createElement('div');el.className='bar';el.dataset.id=b.id;el.style.background=b.col;bd.appendChild(el);el.style.top=((b.r+1)*cs+1)+'px'}
+    Object.assign(el.style,{left:(b.c*cs+1)+'px',top:(b.r*cs+1)+'px',width:(b.len*cs-2)+'px',height:(cs-2)+'px'});}
+  bd.querySelectorAll('.bar').forEach(el=>{if(!have.has(el.dataset.id))el.remove()});
+  $('pv').style.width=(COLS*cs+8)+'px';$('pv').innerHTML=nextRow.map(s=>`<i style="left:${s.c*cs+2}px;width:${s.len*cs-4}px"></i>`).join('');
+  $('sc').textContent=score;$('bs').textContent=best;
+}
+function start(){bars=[];score=0;$('bd').innerHTML='';for(let i=0;i<3;i++){nextRow=genRow();pushRow()}nextRow=genRow();settle();
+  const main=$('main').getBoundingClientRect();cs=Math.floor(Math.min((Math.min(innerWidth,440)-36)/COLS,(main.height-150)/ROWS,48));render()}
+let D=null;
+$('bd').addEventListener('pointerdown',e=>{
+  if(busy)return;const el=e.target.closest('.bar');if(!el)return;const b=bars.find(x=>x.id==el.dataset.id);
+  const g=occ(b);let lo=b.c,hi=b.c;while(lo>0&&!g[b.r*COLS+lo-1])lo--;while(hi+b.len<COLS&&!g[b.r*COLS+hi+b.len])hi++;
+  D={b,el,x0:e.clientX,c0:b.c,lo,hi,c:b.c};el.classList.add('drag');try{$('bd').setPointerCapture(e.pointerId)}catch(_){}JG.tutDone();
+});
+$('bd').addEventListener('pointermove',e=>{if(!D)return;const dx=(e.clientX-D.x0)/cs;const c=Math.max(D.lo,Math.min(D.hi,D.c0+dx));D.c=Math.round(c);D.el.style.left=(c*cs+1)+'px'});
+addEventListener('pointerup',()=>{if(!D)return;const d=D;D=null;d.el.classList.remove('drag');
+  if(d.c!==d.c0){d.b.c=d.c;render();JG.SFX.place();JG.vibrate();afterMove()}else render()});
+start();
+JG.tutorial('Slide a block left or right to fill a whole row',()=>document.querySelector('.bar'),'top');
+})();
+</script></body></html>

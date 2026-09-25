@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Water Sort</title><link rel="stylesheet" href="common.css">
+<style>
+:root{--bg:#1d1840;--bg2:#12102a;--tipbg:#7c5cff;--accent:#9d7bff;--panel:rgba(255,255,255,.1)}
+#tubes{display:flex;flex-wrap:wrap;justify-content:center;gap:18px 14px;max-width:440px}
+.tube{width:var(--tw);height:calc(var(--tw)*3.6);border:3px solid rgba(255,255,255,.75);border-top:0;border-radius:0 0 calc(var(--tw)/2) calc(var(--tw)/2);position:relative;cursor:pointer;display:flex;flex-direction:column-reverse;overflow:hidden;padding:3px;gap:0;transition:transform .15s;background:rgba(255,255,255,.05)}
+.tube::before{content:"";position:absolute;top:0;left:-6px;right:-6px;height:8px;border:3px solid rgba(255,255,255,.75);border-radius:6px;transform:translateY(-8px)}
+.tubewrap{padding-top:10px}
+.tube.sel{transform:translateY(-18px)}
+.seg{height:calc((100% - 8px)/4);flex:none;position:relative}
+.seg:first-child{border-radius:0 0 calc(var(--tw)/2 - 4px) calc(var(--tw)/2 - 4px)}
+.seg::after{content:"";position:absolute;left:14%;top:0;bottom:0;width:14%;background:rgba(255,255,255,.22)}
+.tube.done{border-color:#7dff9a}
+</style></head><body>
+<div class="jg-main" id="main"><div id="tubes"></div>
+<div class="jg-bar" style="margin-top:22px"><button class="jg-btn" id="undo"></button><button class="jg-btn" id="add"></button><button class="jg-btn" id="rs"></button></div></div>
+<script src="common.js"></script><script src="sort-engine.js"></script>
+<script>
+(function(){
+const CAP=4,COL=['#e8323f','#ffd91a','#2f8cff','#39c45a','#ff8a1f','#b04dff','#ff6fb5','#23d1d1','#8b5a2b','#9aa3b5','#1f3fb0'];
+let level=JG.load('level',1),T,sel=null,hist=[],added=false;
+JG.init({id:'water',name:'Water Sort',onReplay:()=>start()});
+const $=id=>document.getElementById(id);
+$('undo').innerHTML=JG.ICON.undo+' Undo';$('add').innerHTML=JG.ICON.plus+' Tube';$('rs').innerHTML=JG.ICON.replay+' Restart';
+function start(){T=SortEngine.gen(level,CAP,[[0,0],[0,0,1,1],[1,1]]);sel=null;hist=[];added=false;$('add').disabled=false;JG.stats([['Level',level]]);render()}
+function render(){
+  const n=T.length,tw=Math.max(34,Math.min(52,Math.floor((Math.min(innerWidth,440)-20)/Math.min(n,level<=2?3:6))-18));
+  const box=$('tubes');box.style.setProperty('--tw',tw+'px');
+  box.innerHTML=T.map((t,i)=>`<div class="tubewrap"><div class="tube${sel===i?' sel':''}${t.length===CAP&&t.every(c=>c===t[0])?' done':''}" data-i="${i}">${t.map(c=>`<div class="seg" style="background:${COL[c]}"></div>`).join('')}</div></div>`).join('');
+}
+$('tubes').addEventListener('click',e=>{
+  const tb=e.target.closest('.tube');if(!tb)return;const i=+tb.dataset.i;
+  if(sel===null){if(!T[i].length)return;sel=i;JG.SFX.tap();render();JG.tutDone();return}
+  if(sel===i){sel=null;render();return}
+  if(SortEngine.canPour(T[sel],T[i],CAP)){hist.push(JSON.stringify(T));SortEngine.pour(T[sel],T[i],CAP);sel=null;JG.tone(500,.12,'sine',.08);JG.vibrate();render();
+    if(SortEngine.solved(T,CAP))setTimeout(()=>JG.result({win:true,title:'Level Complete!',lines:['Level '+level+' sorted'],buttons:[{label:'Next Level',fn:()=>{level++;JG.save('level',level);start()}}]}),400);
+    else if(!SortEngine.anyMove(T,CAP))setTimeout(()=>JG.toast('No moves! Undo or add a tube'),200);
+  }else{JG.SFX.bad();sel=i;if(!T[i].length)sel=null;render()}
+});
+$('undo').onclick=()=>{if(!hist.length)return;T=JSON.parse(hist.pop());sel=null;JG.SFX.tap();render()};
+$('add').onclick=()=>{if(added)return;added=true;T.push([]);$('add').disabled=true;JG.SFX.tap();render()};
+$('rs').onclick=()=>{JG.SFX.tap();start()};
+start();
+JG.tutorial('Tap a tube, then tap where to pour',()=>document.querySelector('.tube[data-i="1"]'),'bottom');
+})();
+</script></body></html>
